@@ -1,0 +1,18 @@
+name = "kids-gallery-worker"
+main = "src/index.js"
+compatibility_date = "2023-07-01"
+
+
+# R2 存储桶绑定
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "tyyimages"
+
+# KV 命名空间绑定
+[[kv_namespaces]]
+binding = "KV_STORE"
+id = "8dc4c06a3c604ea594d267ae033aff81"
+preview_id = "8dc4c06a3c604ea594d267ae033aff81"
+
+[dev]
+tail = false
