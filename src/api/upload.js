@@ -3,7 +3,7 @@ export async function handleUploadPost(c) {
     const request = c.req.raw;
     const env = c.env;
     const formData = await request.formData();
-    const file = formData.get('file');
+    const files = formData.getAll('file');
     const title = formData.get('title') || '未命名作品';
     const description = formData.get('description') || '';
     const tags = JSON.parse(formData.get('tags') || '[]');
@@ -11,7 +11,7 @@ export async function handleUploadPost(c) {
     const pagesStr = formData.get('pages');
     const pages = pagesStr ? JSON.parse(pagesStr) : [];
 
-    if (!file) {
+    if (files.length === 0) {
       return c.json({ error: '缺少文件' }, 400);
     }
 
@@ -20,27 +20,52 @@ export async function handleUploadPost(c) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const random = Math.random().toString(36).substring(2, 8);
-    const extension = file.name.split('.').pop() || 'png';
-    const fileName = `${year}/${month}/${timestamp}-${random}.${extension}`;
-
-    const arrayBuffer = await file.arrayBuffer();
     
-    await env.R2_BUCKET.put(fileName, arrayBuffer, {
-      httpMetadata: {
-        contentType: file.type || 'image/png',
-      },
-    });
+    let mainImageUrl = '';
+    const processedPages = [];
+    
+    // 处理所有上传的文件
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileRandom = Math.random().toString(36).substring(2, 8);
+      const extension = file.name.split('.').pop() || 'png';
+      const fileName = `${year}/${month}/${timestamp}-${fileRandom}.${extension}`;
+      
+      const arrayBuffer = await file.arrayBuffer();
+      
+      await env.R2_BUCKET.put(fileName, arrayBuffer, {
+        httpMetadata: {
+          contentType: file.type || 'image/png',
+        },
+      });
+      
+      const fileUrl = `https://imgs.tangyiyi.dpdns.org/${fileName}`;
+      
+      // 第一个文件作为主封面
+      if (i === 0) {
+        mainImageUrl = fileUrl;
+      }
+      
+      // 如果是书籍类型，从第二个文件开始作为正文页
+      if (type === 'book' && i > 0) {
+        const pageText = pages[i-1]?.text || '';
+        processedPages.push({
+          imageUrl: fileUrl,
+          text: pageText
+        });
+      }
+    }
 
     const imageData = {
       id: `${timestamp}-${random}`,
       title,
       description,
-      imageUrl: `https://imgs.tangyiyi.dpdns.org/${fileName}`,
+      imageUrl: mainImageUrl,
       tags,
       type,
       uploadTime: timestamp,
       views: 0,
-      pages: type === 'book' ? pages : []
+      pages: type === 'book' ? processedPages : []
     };
 
     await env.KV_STORE.put(`image:${imageData.id}`, JSON.stringify(imageData));
