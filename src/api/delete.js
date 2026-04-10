@@ -1,7 +1,31 @@
+import { getCookieFromRequest } from '../utils/cookie.js';
+
 export async function handleDeletePost(c) {
   try {
     const request = c.req.raw;
     const env = c.env;
+    
+    // 检查是否已登录
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '') ||
+                  getCookieFromRequest(request, 'admin_token');
+    
+    if (!token) {
+      return c.json({ error: '未授权' }, 401);
+    }
+    
+    const sessionData = await env.KV_STORE.get(`session:${token}`);
+    if (!sessionData) {
+      return c.json({ error: '会话无效' }, 401);
+    }
+    
+    const session = JSON.parse(sessionData);
+    const now = Date.now();
+    
+    if (now > session.expiresAt) {
+      await env.KV_STORE.delete(`session:${token}`);
+      return c.json({ error: '会话已过期' }, 401);
+    }
+    
     const { id, type } = await request.json();
 
     if (!id) {
